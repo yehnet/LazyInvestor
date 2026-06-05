@@ -1,4 +1,6 @@
 // ===== ETF Configuration =====
+const TASE_URL = (id) => `https://www.tase.co.il/he/market_data/security/${id}/major_data`;
+
 const ETF_CONFIG = [
   {
     id: '1159250',
@@ -7,6 +9,7 @@ const ETF_CONFIG = [
     target: 0.60,
     color: 'var(--color-sp500)',
     colorHex: '#6366f1',
+    taseUrl: TASE_URL('1159250'),
   },
   {
     id: '1159094',
@@ -15,6 +18,7 @@ const ETF_CONFIG = [
     target: 0.25,
     color: 'var(--color-europe)',
     colorHex: '#06b6d4',
+    taseUrl: TASE_URL('1159094'),
   },
   {
     id: '1159169',
@@ -23,6 +27,7 @@ const ETF_CONFIG = [
     target: 0.15,
     color: 'var(--color-em)',
     colorHex: '#f59e0b',
+    taseUrl: TASE_URL('1159169'),
   },
 ];
 
@@ -53,7 +58,12 @@ function renderPriceInputs() {
       <div class="etf-info">
         <div class="etf-name">${etf.name}</div>
         <div class="etf-meta">
-          <span>TASE #${etf.id}</span>
+          <a href="${etf.taseUrl}" target="_blank" rel="noopener noreferrer" class="tase-link" title="View on TASE">
+            <svg class="tase-link-icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M6 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3M9 2h5m0 0v5m0-5L7 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            TASE #${etf.id}
+          </a>
           <span>•</span>
           <span class="etf-target">${(etf.target * 100).toFixed(0)}%</span>
         </div>
