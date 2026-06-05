@@ -1,24 +1,459 @@
-import './style.css'
-import javascriptLogo from './javascript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.js'
+// ===== ETF Configuration =====
+const ETF_CONFIG = [
+  {
+    id: '1159250',
+    name: 'iShares Core S&P 500',
+    shortName: 'S&P 500',
+    target: 0.60,
+    color: 'var(--color-sp500)',
+    colorHex: '#6366f1',
+  },
+  {
+    id: '1159094',
+    name: 'iShares MSCI Europe',
+    shortName: 'Europe',
+    target: 0.25,
+    color: 'var(--color-europe)',
+    colorHex: '#06b6d4',
+  },
+  {
+    id: '1159169',
+    name: 'iShares Core MSCI EM',
+    shortName: 'Emerging',
+    target: 0.15,
+    color: 'var(--color-em)',
+    colorHex: '#f59e0b',
+  },
+];
 
-document.querySelector('#app').innerHTML = `
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-      <img src="${javascriptLogo}" class="logo vanilla" alt="JavaScript logo" />
-    </a>
-    <h1>Hello Vite!</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
+const FEE_RESERVE = 100; // NIS
+
+// ===== State =====
+const state = {
+  prices: {},   // ETF id -> price per unit
+  holdings: {}, // ETF id -> number of units
+  deposit: 0,
+};
+
+// ===== DOM Setup =====
+function init() {
+  renderPriceInputs();
+  renderHoldingInputs();
+  setupDepositInput();
+  setupCalculateButton();
+  loadSavedState();
+}
+
+// ===== Render Price Inputs =====
+function renderPriceInputs() {
+  const container = document.getElementById('etf-prices');
+  container.innerHTML = ETF_CONFIG.map(etf => `
+    <div class="etf-row">
+      <div class="etf-color-dot" style="color: ${etf.color}; background: ${etf.color}"></div>
+      <div class="etf-info">
+        <div class="etf-name">${etf.name}</div>
+        <div class="etf-meta">
+          <span>TASE #${etf.id}</span>
+          <span>•</span>
+          <span class="etf-target">${(etf.target * 100).toFixed(0)}%</span>
+        </div>
+      </div>
+      <div class="input-group">
+        <span class="input-prefix">₪</span>
+        <input
+          type="number"
+          id="price-${etf.id}"
+          class="input-field"
+          placeholder="0.00"
+          min="0"
+          step="0.01"
+          data-etf-id="${etf.id}"
+          data-input-type="price"
+          aria-label="Price per unit for ${etf.name}"
+        />
+      </div>
     </div>
-    <p class="read-the-docs">
-      Click on the Vite logo to learn more
-    </p>
-  </div>
-`
+  `).join('');
 
-setupCounter(document.querySelector('#counter'))
+  // Add event listeners
+  container.querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', handlePriceInput);
+    input.addEventListener('change', handlePriceInput);
+  });
+}
+
+// ===== Render Holding Inputs =====
+function renderHoldingInputs() {
+  const container = document.getElementById('etf-holdings');
+  container.innerHTML = ETF_CONFIG.map(etf => `
+    <div class="etf-row">
+      <div class="etf-color-dot" style="color: ${etf.color}; background: ${etf.color}"></div>
+      <div class="etf-info">
+        <div class="etf-name">${etf.shortName}</div>
+        <div class="etf-meta">
+          <span id="holding-value-${etf.id}" class="etf-holding-value">₪0</span>
+        </div>
+      </div>
+      <div class="input-group">
+        <input
+          type="number"
+          id="holding-${etf.id}"
+          class="input-field input-field-units"
+          placeholder="0"
+          min="0"
+          step="1"
+          data-etf-id="${etf.id}"
+          data-input-type="holding"
+          aria-label="Number of units for ${etf.name}"
+        />
+        <span class="input-suffix">units</span>
+      </div>
+    </div>
+  `).join('');
+
+  // Add event listeners
+  container.querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', handleHoldingInput);
+    input.addEventListener('change', handleHoldingInput);
+  });
+}
+
+// ===== Setup Deposit Input =====
+function setupDepositInput() {
+  const depositInput = document.getElementById('deposit-amount');
+  depositInput.addEventListener('input', handleDepositInput);
+  depositInput.addEventListener('change', handleDepositInput);
+}
+
+// ===== Setup Calculate Button =====
+function setupCalculateButton() {
+  const btn = document.getElementById('btn-calculate');
+  btn.addEventListener('click', calculate);
+}
+
+// ===== Input Handlers =====
+function handlePriceInput(e) {
+  const id = e.target.dataset.etfId;
+  const value = parseFloat(e.target.value) || 0;
+  state.prices[id] = value;
+
+  // Update holding value display
+  updateHoldingValue(id);
+  updateButtonState();
+  saveState();
+}
+
+function handleHoldingInput(e) {
+  const id = e.target.dataset.etfId;
+  const value = parseInt(e.target.value) || 0;
+  state.holdings[id] = value;
+
+  // Update holding value display
+  updateHoldingValue(id);
+  updateButtonState();
+  saveState();
+}
+
+function handleDepositInput(e) {
+  const value = parseFloat(e.target.value) || 0;
+  state.deposit = value;
+
+  const available = Math.max(0, value - FEE_RESERVE);
+  document.getElementById('reserved-fees').textContent = `₪${FEE_RESERVE.toLocaleString()}`;
+  document.getElementById('available-invest').textContent = `₪${available.toLocaleString()}`;
+
+  updateButtonState();
+  saveState();
+}
+
+function updateHoldingValue(id) {
+  const price = state.prices[id] || 0;
+  const units = state.holdings[id] || 0;
+  const value = price * units;
+  const el = document.getElementById(`holding-value-${id}`);
+  if (el) {
+    el.textContent = value > 0 ? `₪${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₪0';
+  }
+}
+
+// ===== Button State =====
+function updateButtonState() {
+  const btn = document.getElementById('btn-calculate');
+  const hasPrices = ETF_CONFIG.every(etf => (state.prices[etf.id] || 0) > 0);
+  const hasDeposit = state.deposit > FEE_RESERVE;
+
+  btn.disabled = !(hasPrices && hasDeposit);
+}
+
+// ===== CALCULATION ENGINE =====
+function calculate() {
+  const availableCash = Math.max(0, state.deposit - FEE_RESERVE);
+
+  // Current portfolio values
+  const currentValues = ETF_CONFIG.map(etf => ({
+    ...etf,
+    units: state.holdings[etf.id] || 0,
+    price: state.prices[etf.id] || 0,
+    value: (state.holdings[etf.id] || 0) * (state.prices[etf.id] || 0),
+  }));
+
+  const currentTotal = currentValues.reduce((sum, e) => sum + e.value, 0);
+  const newTotal = currentTotal + availableCash;
+
+  // Target values after adding new money
+  const targetValues = currentValues.map(etf => ({
+    ...etf,
+    targetValue: newTotal * etf.target,
+    deficit: (newTotal * etf.target) - etf.value,
+  }));
+
+  // Greedy allocation: buy whole units prioritizing largest deficits first
+  let remainingCash = availableCash;
+  const allocation = targetValues.map(etf => ({
+    ...etf,
+    buyUnits: 0,
+    buyCost: 0,
+  }));
+
+  // Iteratively buy 1 unit of the ETF with the largest remaining deficit
+  let madeProgress = true;
+  while (remainingCash > 0 && madeProgress) {
+    madeProgress = false;
+
+    // Find ETF with largest deficit relative to target that we can afford
+    let bestIdx = -1;
+    let bestDeficit = -Infinity;
+
+    for (let i = 0; i < allocation.length; i++) {
+      const etf = allocation[i];
+      const currentVal = etf.value + (etf.buyUnits * etf.price);
+      const deficit = (newTotal * etf.target) - currentVal;
+
+      if (deficit > 0 && etf.price <= remainingCash && deficit > bestDeficit) {
+        bestDeficit = deficit;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx >= 0) {
+      allocation[bestIdx].buyUnits += 1;
+      allocation[bestIdx].buyCost += allocation[bestIdx].price;
+      remainingCash -= allocation[bestIdx].price;
+      madeProgress = true;
+    }
+  }
+
+  // Calculate final state
+  const results = allocation.map(etf => {
+    const newUnits = etf.units + etf.buyUnits;
+    const newValue = newUnits * etf.price;
+    const actualPct = newTotal > 0 ? (newValue / (newTotal - remainingCash)) * 100 : 0;
+    const deviation = actualPct - (etf.target * 100);
+
+    return {
+      ...etf,
+      newUnits,
+      newValue,
+      actualPct,
+      deviation,
+    };
+  });
+
+  const totalInvested = availableCash - remainingCash;
+  const leftover = remainingCash;
+
+  renderResults(results, totalInvested, leftover, newTotal);
+}
+
+// ===== RENDER RESULTS =====
+function renderResults(results, totalInvested, leftover, portfolioTotal) {
+  const section = document.getElementById('section-results');
+  section.classList.remove('hidden');
+  section.classList.add('visible');
+
+  // Update subtitle
+  const subtitle = document.getElementById('results-subtitle');
+  subtitle.textContent = leftover > 0
+    ? `Invest ₪${totalInvested.toLocaleString(undefined, { maximumFractionDigits: 2 })} • ₪${leftover.toLocaleString(undefined, { maximumFractionDigits: 2 })} remainder (can't buy a full unit)`
+    : `Invest ₪${totalInvested.toLocaleString(undefined, { maximumFractionDigits: 2 })} across your 3 ETFs`;
+
+  // Render table
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = results.map(r => {
+    const deviationClass = Math.abs(r.deviation) < 1 ? 'deviation-good'
+      : Math.abs(r.deviation) < 3 ? 'deviation-ok'
+      : 'deviation-bad';
+    const deviationSign = r.deviation >= 0 ? '+' : '';
+
+    return `
+      <tr>
+        <td>
+          <div class="etf-name-cell">
+            <div class="etf-color-dot" style="color: ${r.color}; background: ${r.color}"></div>
+            <span>${r.shortName}</span>
+          </div>
+        </td>
+        <td class="buy-units">${r.buyUnits > 0 ? '+' + r.buyUnits : '—'}</td>
+        <td>₪${r.buyCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>${r.newUnits.toLocaleString()}</td>
+        <td>₪${r.newValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>${(r.target * 100).toFixed(0)}%</td>
+        <td>${r.actualPct.toFixed(1)}%</td>
+        <td class="${deviationClass}">${deviationSign}${r.deviation.toFixed(1)}%</td>
+      </tr>
+    `;
+  }).join('');
+
+  // Render footer
+  const tfoot = document.getElementById('results-footer');
+  const totalNewValue = results.reduce((sum, r) => sum + r.newValue, 0);
+  const totalBuyUnits = results.reduce((sum, r) => sum + r.buyUnits, 0);
+  tfoot.innerHTML = `
+    <tr>
+      <td>Total</td>
+      <td class="buy-units">+${totalBuyUnits}</td>
+      <td>₪${totalInvested.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td></td>
+      <td>₪${totalNewValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td>100%</td>
+      <td></td>
+      <td></td>
+    </tr>
+  `;
+
+  // Render allocation bars
+  renderAllocationBars(results);
+
+  // Render summary cards
+  renderSummaryCards(results, totalInvested, leftover);
+
+  // Scroll to results
+  setTimeout(() => {
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+}
+
+// ===== Allocation Bars =====
+function renderAllocationBars(results) {
+  const container = document.getElementById('allocation-visual');
+  container.innerHTML = `
+    <div class="allocation-visual-label">Portfolio Allocation vs Target</div>
+    <div class="allocation-bars">
+      ${results.map(r => `
+        <div class="alloc-bar-row">
+          <div class="alloc-bar-label">${r.shortName}</div>
+          <div class="alloc-bar-track">
+            <div
+              class="alloc-bar-fill"
+              style="
+                width: ${Math.min(r.actualPct, 100)}%;
+                background: linear-gradient(90deg, ${r.colorHex}, ${r.colorHex}cc);
+              "
+            >
+              <span class="alloc-bar-value">${r.actualPct.toFixed(1)}%</span>
+            </div>
+            <div class="alloc-bar-target" style="left: ${r.target * 100}%">
+              <span class="alloc-bar-target-label">Target ${(r.target * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Animate bars in
+  requestAnimationFrame(() => {
+    container.querySelectorAll('.alloc-bar-fill').forEach(bar => {
+      const w = bar.style.width;
+      bar.style.width = '0%';
+      requestAnimationFrame(() => {
+        bar.style.width = w;
+      });
+    });
+  });
+}
+
+// ===== Summary Cards =====
+function renderSummaryCards(results, totalInvested, leftover) {
+  const container = document.getElementById('summary-cards');
+  const maxDeviation = Math.max(...results.map(r => Math.abs(r.deviation)));
+  const totalPortfolio = results.reduce((sum, r) => sum + r.newValue, 0);
+
+  container.innerHTML = `
+    <div class="summary-card">
+      <div class="summary-card-label">Total Portfolio</div>
+      <div class="summary-card-value accent">₪${totalPortfolio.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-card-label">Invested Today</div>
+      <div class="summary-card-value green">₪${totalInvested.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-card-label">Max Deviation</div>
+      <div class="summary-card-value ${maxDeviation < 1 ? 'green' : maxDeviation < 3 ? 'yellow' : ''}">${maxDeviation.toFixed(1)}%</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-card-label">Uninvested + Fees</div>
+      <div class="summary-card-value">₪${(leftover + FEE_RESERVE).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+    </div>
+  `;
+}
+
+// ===== PERSISTENCE =====
+const STORAGE_KEY = 'lazyinvestor_state';
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      prices: state.prices,
+      holdings: state.holdings,
+      deposit: state.deposit,
+    }));
+  } catch (e) {
+    // localStorage not available
+  }
+}
+
+function loadSavedState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+
+    const data = JSON.parse(saved);
+
+    // Restore prices
+    if (data.prices) {
+      Object.entries(data.prices).forEach(([id, price]) => {
+        state.prices[id] = price;
+        const input = document.getElementById(`price-${id}`);
+        if (input && price > 0) input.value = price;
+      });
+    }
+
+    // Restore holdings
+    if (data.holdings) {
+      Object.entries(data.holdings).forEach(([id, units]) => {
+        state.holdings[id] = units;
+        const input = document.getElementById(`holding-${id}`);
+        if (input && units > 0) input.value = units;
+      });
+    }
+
+    // Restore deposit
+    if (data.deposit) {
+      state.deposit = data.deposit;
+      const input = document.getElementById('deposit-amount');
+      if (input && data.deposit > 0) input.value = data.deposit;
+      handleDepositInput({ target: input });
+    }
+
+    // Update all value displays
+    ETF_CONFIG.forEach(etf => updateHoldingValue(etf.id));
+    updateButtonState();
+  } catch (e) {
+    // corrupted state, ignore
+  }
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', init);
