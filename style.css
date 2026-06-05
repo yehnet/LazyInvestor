@@ -250,6 +250,119 @@ body {
   color: var(--text-secondary);
 }
 
+/* ===== DASHBOARD ===== */
+.card-dashboard {
+  text-align: center;
+  padding: var(--space-xl);
+  background: linear-gradient(180deg, rgba(22, 22, 50, 0.9) 0%, rgba(17, 17, 40, 0.7) 100%);
+  border-top: 2px solid rgba(99, 102, 241, 0.3);
+}
+
+.dashboard-title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  margin-bottom: var(--space-xl);
+  letter-spacing: -0.02em;
+}
+
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xl);
+}
+
+@media (min-width: 640px) {
+  .dashboard-content {
+    flex-direction: row;
+    justify-content: center;
+    gap: var(--space-3xl);
+  }
+}
+
+.donut-container {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.donut-chart {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+
+.donut-segment {
+  transition: stroke-dasharray 0.6s ease-out, stroke-dashoffset 0.6s ease-out;
+}
+
+.donut-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  width: 100%;
+}
+
+.donut-total-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.donut-total-value {
+  font-size: var(--font-size-xl);
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.dashboard-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  text-align: left;
+  min-width: 200px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.legend-info {
+  flex: 1;
+}
+
+.legend-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.legend-value {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.legend-pct {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+}
+
 /* ===== ETF GRID ===== */
 .etf-grid {
   display: grid;

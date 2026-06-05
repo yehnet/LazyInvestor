@@ -42,6 +42,32 @@
 
     <!-- Main Content -->
     <main class="main">
+      <!-- Dashboard -->
+      <section class="card card-dashboard" id="section-dashboard">
+        <h2 class="dashboard-title">Portfolio Overview</h2>
+        
+        <div class="dashboard-content">
+          <!-- Donut Chart -->
+          <div class="donut-container">
+            <svg viewBox="0 0 36 36" class="donut-chart" id="donut-chart">
+              <!-- Background circle -->
+              <circle class="donut-ring" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="var(--border-subtle)" stroke-width="3"></circle>
+              <!-- Segments rendered by JS -->
+              <g id="donut-segments"></g>
+            </svg>
+            <div class="donut-center">
+              <div class="donut-total-label">Total Value</div>
+              <div class="donut-total-value" id="dashboard-total">₪0</div>
+            </div>
+          </div>
+          
+          <!-- Legend -->
+          <div class="dashboard-legend" id="dashboard-legend">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </section>
+
       <!-- Step 1: ETF Prices -->
       <section class="card card-prices" id="section-prices">
         <div class="card-header">

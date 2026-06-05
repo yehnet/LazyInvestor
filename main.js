@@ -170,6 +170,7 @@ function handlePriceInput(e) {
   // Update holding value display
   updateHoldingValue(id);
   updateButtonState();
+  updateDashboard();
   saveState();
 }
 
@@ -181,6 +182,7 @@ function handleHoldingInput(e) {
   // Update holding value display
   updateHoldingValue(id);
   updateButtonState();
+  updateDashboard();
   saveState();
 }
 
@@ -446,6 +448,74 @@ function renderSummaryCards(results, totalInvested, leftover) {
   `;
 }
 
+// ===== DASHBOARD =====
+function updateDashboard() {
+  const currentValues = ETF_CONFIG.map(etf => ({
+    ...etf,
+    units: state.holdings[etf.id] || 0,
+    price: state.prices[etf.id] || 0,
+    value: (state.holdings[etf.id] || 0) * (state.prices[etf.id] || 0),
+  }));
+
+  const totalValue = currentValues.reduce((sum, e) => sum + e.value, 0);
+
+  // Update total label
+  const totalEl = document.getElementById('dashboard-total');
+  if (totalEl) {
+    totalEl.textContent = `₪${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  }
+
+  // Update Donut Chart Segments
+  const segmentsGroup = document.getElementById('donut-segments');
+  let currentOffset = 100; // Start from top (stroke-dashoffset moves backwards)
+  
+  if (segmentsGroup) {
+    if (totalValue === 0) {
+      segmentsGroup.innerHTML = '';
+    } else {
+      segmentsGroup.innerHTML = currentValues.map(etf => {
+        const pct = (etf.value / totalValue) * 100;
+        if (pct === 0) return '';
+        
+        // Dasharray: [length of dash (pct), length of gap (100 - pct)]
+        const dashArray = `${pct} ${100 - pct}`;
+        
+        const circle = `
+          <circle
+            class="donut-segment"
+            cx="18" cy="18" r="15.91549430918954"
+            fill="transparent"
+            stroke="${etf.colorHex}"
+            stroke-width="4"
+            stroke-dasharray="${dashArray}"
+            stroke-dashoffset="${currentOffset}"
+          ></circle>
+        `;
+        currentOffset -= pct;
+        return circle;
+      }).join('');
+    }
+  }
+
+  // Update Legend
+  const legend = document.getElementById('dashboard-legend');
+  if (legend) {
+    legend.innerHTML = currentValues.map(etf => {
+      const pct = totalValue > 0 ? (etf.value / totalValue) * 100 : 0;
+      return `
+        <div class="legend-item">
+          <div class="etf-color-dot" style="background: ${etf.color}; box-shadow: 0 0 8px ${etf.color}"></div>
+          <div class="legend-info">
+            <div class="legend-name">${etf.shortName}</div>
+            <div class="legend-value">₪${etf.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+          </div>
+          <div class="legend-pct" style="color: ${etf.color}">${pct.toFixed(1)}%</div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
 // ===== HISTORY =====
 function saveToHistory() {
   if (!state.currentCalculation) return;
@@ -474,6 +544,7 @@ function saveToHistory() {
   
   state.currentCalculation = null;
   updateButtonState();
+  updateDashboard();
   saveState();
   
   // Hide results, render history
@@ -644,6 +715,7 @@ async function loadSavedState() {
     // Update all value displays
     ETF_CONFIG.forEach(etf => updateHoldingValue(etf.id));
     updateButtonState();
+    updateDashboard();
 }
 
 // ===== INIT =====
