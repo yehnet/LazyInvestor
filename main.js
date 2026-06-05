@@ -43,13 +43,13 @@ const state = {
 };
 
 // ===== DOM Setup =====
-function init() {
+async function init() {
   renderPriceInputs();
   renderHoldingInputs();
   setupDepositInput();
   setupCalculateButton();
   setupHistoryActions();
-  loadSavedState();
+  await loadSavedState();
   renderHistory();
 }
 
@@ -555,29 +555,65 @@ function deleteHistoryRecord(id) {
 const STORAGE_KEY = 'lazyinvestor_state';
 
 function saveState() {
+  const data = {
+    prices: state.prices,
+    holdings: state.holdings,
+    deposit: state.deposit,
+    history: state.history,
+  };
+
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      prices: state.prices,
-      holdings: state.holdings,
-      deposit: state.deposit,
-      history: state.history,
-    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
     // localStorage not available
   }
+
+  // Save to backup file via local API
+  fetch('/api/data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).catch(e => {
+    console.error('Failed to save backup:', e);
+  });
 }
 
-function loadSavedState() {
+async function loadSavedState() {
+  let data = null;
+
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return;
-
-    const data = JSON.parse(saved);
-
-    // Restore history
-    if (data.history) {
-      state.history = data.history;
+    // First try to load from local file backup
+    const res = await fetch('/api/data');
+    if (res.ok) {
+      const backupData = await res.json();
+      if (Object.keys(backupData).length > 0) {
+        data = backupData;
+      }
     }
+  } catch (e) {
+    console.warn('Could not load from backup, falling back to localStorage');
+  }
+
+  // Fallback to localStorage if backup is empty or failed
+  if (!data) {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        data = JSON.parse(saved);
+        // If we found local storage data but no backup data, sync it up!
+        saveState(); 
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  if (!data) return;
+
+  // Restore history
+  if (data.history) {
+    state.history = data.history;
+  }
 
     // Restore prices
     if (data.prices) {
@@ -608,9 +644,6 @@ function loadSavedState() {
     // Update all value displays
     ETF_CONFIG.forEach(etf => updateHoldingValue(etf.id));
     updateButtonState();
-  } catch (e) {
-    // corrupted state, ignore
-  }
 }
 
 // ===== INIT =====
