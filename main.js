@@ -38,6 +38,8 @@ const state = {
   prices: {},   // ETF id -> price per unit
   holdings: {}, // ETF id -> number of units
   deposit: 0,
+  history: [],  // array of history records
+  currentCalculation: null, // latest calculation results
 };
 
 // ===== DOM Setup =====
@@ -46,7 +48,25 @@ function init() {
   renderHoldingInputs();
   setupDepositInput();
   setupCalculateButton();
+  setupHistoryActions();
   loadSavedState();
+  renderHistory();
+}
+
+function setupHistoryActions() {
+  const btn = document.getElementById('btn-save-history');
+  if (btn) btn.addEventListener('click', saveToHistory);
+
+  const historyList = document.getElementById('history-list');
+  if (historyList) {
+    historyList.addEventListener('click', (e) => {
+      const deleteBtn = e.target.closest('.btn-delete');
+      if (deleteBtn) {
+        const id = deleteBtn.dataset.deleteId;
+        deleteHistoryRecord(id);
+      }
+    });
+  }
 }
 
 // ===== Render Price Inputs =====
@@ -272,6 +292,23 @@ function calculate() {
   const totalInvested = availableCash - remainingCash;
   const leftover = remainingCash;
 
+  state.currentCalculation = {
+    date: new Date().toISOString(),
+    totalDeposit: state.deposit,
+    totalInvested,
+    leftover,
+    prices: { ...state.prices },
+    results: results.map(r => ({
+      id: r.id,
+      shortName: r.shortName,
+      color: r.color,
+      buyUnits: r.buyUnits,
+      buyCost: r.buyCost,
+      newUnits: r.newUnits,
+      price: r.price
+    }))
+  };
+
   renderResults(results, totalInvested, leftover, newTotal);
 }
 
@@ -409,6 +446,111 @@ function renderSummaryCards(results, totalInvested, leftover) {
   `;
 }
 
+// ===== HISTORY =====
+function saveToHistory() {
+  if (!state.currentCalculation) return;
+  
+  // Add to history
+  const record = {
+    id: Date.now().toString(),
+    ...state.currentCalculation
+  };
+  state.history.unshift(record); // Add to beginning
+  
+  // Update holdings
+  state.currentCalculation.results.forEach(r => {
+    state.holdings[r.id] = r.newUnits;
+    const input = document.getElementById(`holding-${r.id}`);
+    if (input) input.value = r.newUnits;
+    updateHoldingValue(r.id);
+  });
+  
+  // Clear deposit
+  state.deposit = 0;
+  const depInput = document.getElementById('deposit-amount');
+  if (depInput) depInput.value = '';
+  document.getElementById('reserved-fees').textContent = `₪${FEE_RESERVE.toLocaleString()}`;
+  document.getElementById('available-invest').textContent = `₪0`;
+  
+  state.currentCalculation = null;
+  updateButtonState();
+  saveState();
+  
+  // Hide results, render history
+  document.getElementById('section-results').classList.remove('visible');
+  document.getElementById('section-results').classList.add('hidden');
+  
+  renderHistory();
+  
+  // Provide visual feedback
+  const btn = document.getElementById('btn-save-history');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M16.667 5L7.5 14.167L3.333 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Saved & Updated!`;
+  btn.disabled = true;
+  btn.classList.add('btn-success');
+  
+  setTimeout(() => {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+    btn.classList.remove('btn-success');
+  }, 3000);
+}
+
+function renderHistory() {
+  const section = document.getElementById('section-history');
+  const container = document.getElementById('history-list');
+  
+  if (!section || !container) return;
+  
+  if (!state.history || state.history.length === 0) {
+    section.classList.add('hidden');
+    section.classList.remove('visible');
+    return;
+  }
+  
+  section.classList.remove('hidden');
+  section.classList.add('visible');
+  
+  container.innerHTML = state.history.map(record => {
+    const d = new Date(record.date);
+    const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    
+    return `
+      <div class="history-item">
+        <div class="history-header">
+          <div class="history-date">${dateStr}</div>
+          <div class="history-deposit">Deposited: <strong>₪${record.totalDeposit.toLocaleString()}</strong></div>
+          <button class="btn-delete" data-delete-id="${record.id}" aria-label="Delete record" title="Delete">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+          </button>
+        </div>
+        <div class="history-details">
+          ${record.results.map(r => `
+            <div class="history-etf">
+              <div class="history-etf-name">
+                <span class="etf-color-dot" style="background: ${r.color}; box-shadow: none; width: 8px; height: 8px;"></span>
+                ${r.shortName}
+              </div>
+              <div class="history-etf-buy ${r.buyUnits > 0 ? 'history-bought' : ''}">
+                ${r.buyUnits > 0 ? '+' + r.buyUnits + ' units' : 'No purchase'}
+              </div>
+              <div class="history-etf-price">@ ₪${r.price.toFixed(2)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function deleteHistoryRecord(id) {
+  if (confirm('Are you sure you want to delete this history record?')) {
+    state.history = state.history.filter(h => h.id !== id);
+    saveState();
+    renderHistory();
+  }
+}
+
 // ===== PERSISTENCE =====
 const STORAGE_KEY = 'lazyinvestor_state';
 
@@ -418,6 +560,7 @@ function saveState() {
       prices: state.prices,
       holdings: state.holdings,
       deposit: state.deposit,
+      history: state.history,
     }));
   } catch (e) {
     // localStorage not available
@@ -430,6 +573,11 @@ function loadSavedState() {
     if (!saved) return;
 
     const data = JSON.parse(saved);
+
+    // Restore history
+    if (data.history) {
+      state.history = data.history;
+    }
 
     // Restore prices
     if (data.prices) {
