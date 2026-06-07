@@ -19,7 +19,7 @@
     <div class="glow glow-2"></div>
     <div class="glow glow-3"></div>
 
-    <!-- Header -->
+    <!-- Header — compact single line -->
     <header class="header">
       <div class="logo">
         <div class="logo-icon">
@@ -37,92 +37,63 @@
         </div>
         <span class="logo-text">LazyInvestor</span>
       </div>
-      <p class="tagline">Smart portfolio rebalancing for TASE ETFs</p>
-      <div id="market-status-container"></div>
+      <div class="header-right">
+        <div id="market-status-container"></div>
+      </div>
     </header>
 
     <!-- Main Content -->
     <main class="main">
-      <!-- Dashboard -->
-      <section class="card card-dashboard" id="section-dashboard">
-        <h2 class="dashboard-title">Portfolio Overview</h2>
-        
-        <div class="dashboard-content">
-          <!-- Donut Chart -->
-          <div class="donut-container">
-            <svg viewBox="0 0 36 36" class="donut-chart" id="donut-chart">
-              <!-- Background circle -->
-              <circle class="donut-ring" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="var(--border-subtle)" stroke-width="3"></circle>
-              <!-- Segments rendered by JS -->
-              <g id="donut-segments"></g>
-            </svg>
-            <div class="donut-center">
-              <div class="donut-total-label">Total Value</div>
-              <div class="donut-total-value" id="dashboard-total">₪0</div>
-            </div>
-          </div>
-          
-          <!-- Legend -->
-          <div class="dashboard-legend" id="dashboard-legend">
-            <!-- Rendered by JS -->
-          </div>
+      <!-- Merged Input Table: Prices + Holdings in one card -->
+      <section class="card card-input" id="section-input">
+        <div class="card-input-header">
+          <h2 class="card-title-inline">Portfolio</h2>
+        </div>
+        <div class="input-table-wrapper">
+          <table class="input-table" id="input-table">
+            <thead>
+              <tr>
+                <th class="col-etf">ETF</th>
+                <th class="col-price">Price (₪)</th>
+                <th class="col-units">Units</th>
+                <th class="col-value">Value (₪)</th>
+              </tr>
+            </thead>
+            <tbody id="input-table-body">
+              <!-- Rendered by JS -->
+            </tbody>
+            <tfoot>
+              <tr>
+                <td class="foot-label">Total</td>
+                <td></td>
+                <td></td>
+                <td class="foot-total" id="input-table-total">₪0</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </section>
 
-      <!-- Step 1: ETF Prices -->
-      <section class="card card-prices" id="section-prices">
-        <div class="card-header">
-          <div class="step-badge">1</div>
-          <div>
-            <h2 class="card-title">Current ETF Prices</h2>
-            <p class="card-subtitle">Enter today's price per unit from your broker or TASE website</p>
-          </div>
-        </div>
-        <div class="etf-grid" id="etf-prices">
-          <!-- Rendered by JS -->
-        </div>
-      </section>
-
-      <!-- Step 2: Current Holdings -->
-      <section class="card card-holdings" id="section-holdings">
-        <div class="card-header">
-          <div class="step-badge">2</div>
-          <div>
-            <h2 class="card-title">Your Current Holdings</h2>
-            <p class="card-subtitle">How many units of each ETF do you currently own?</p>
-          </div>
-        </div>
-        <div class="etf-grid" id="etf-holdings">
-          <!-- Rendered by JS -->
-        </div>
-      </section>
-
-      <!-- Step 3: New Deposit -->
-      <section class="card card-deposit" id="section-deposit">
-        <div class="card-header">
-          <div class="step-badge">3</div>
-          <div>
-            <h2 class="card-title">New Deposit</h2>
-            <p class="card-subtitle">How much NIS are you adding to your account?</p>
-          </div>
-        </div>
-        <div class="deposit-input-wrapper">
-          <div class="input-group input-group-large">
+      <!-- Deposit row — compact inline -->
+      <div class="deposit-row" id="section-deposit">
+        <div class="deposit-field">
+          <label class="deposit-label" for="deposit-amount">New Deposit</label>
+          <div class="input-group">
             <span class="input-prefix">₪</span>
             <input type="number" id="deposit-amount" class="input-field" placeholder="0" min="0" step="1" />
           </div>
-          <div class="deposit-breakdown" id="deposit-breakdown">
-            <div class="breakdown-item">
-              <span class="breakdown-label">Reserved for fees</span>
-              <span class="breakdown-value" id="reserved-fees">₪100</span>
-            </div>
-            <div class="breakdown-item highlight">
-              <span class="breakdown-label">Available to invest</span>
-              <span class="breakdown-value" id="available-invest">₪0</span>
-            </div>
-          </div>
         </div>
-      </section>
+        <div class="deposit-meta">
+          <span class="meta-item">Fee: <strong id="reserved-fees">₪100</strong></span>
+          <span class="meta-item available">Invest: <strong id="available-invest">₪0</strong></span>
+        </div>
+        <button class="btn-history" id="btn-open-history" title="View Deposit History">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 4V8L10.5 10.5M14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          History
+        </button>
+      </div>
 
       <!-- Calculate Button -->
       <button class="btn-calculate" id="btn-calculate" disabled>
@@ -132,83 +103,97 @@
         Calculate Allocation
       </button>
 
-      <!-- Results -->
-      <section class="card card-results hidden" id="section-results">
-        <div class="card-header">
-          <div class="step-badge step-badge-result">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8L7 12L13 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Dashboard — compact, below inputs -->
+      <section class="card card-dashboard" id="section-dashboard">
+        <div class="dashboard-content">
+          <!-- Donut Chart (compact) -->
+          <div class="donut-container">
+            <svg viewBox="0 0 36 36" class="donut-chart" id="donut-chart">
+              <circle class="donut-ring" cx="18" cy="18" r="15.91549430918954" fill="transparent" stroke="var(--border-subtle)" stroke-width="3"></circle>
+              <g id="donut-segments"></g>
             </svg>
+            <div class="donut-center">
+              <div class="donut-total-label">Total</div>
+              <div class="donut-total-value" id="dashboard-total">₪0</div>
+            </div>
           </div>
+          <!-- Legend -->
+          <div class="dashboard-legend" id="dashboard-legend">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Results Modal -->
+    <div class="modal-backdrop" id="results-backdrop">
+      <div class="modal" id="results-modal" role="dialog" aria-modal="true" aria-labelledby="results-modal-title">
+        <div class="modal-header">
           <div>
-            <h2 class="card-title">Your Allocation Plan</h2>
-            <p class="card-subtitle" id="results-subtitle">Here's how to invest your deposit</p>
+            <h2 id="results-modal-title">Your Allocation Plan</h2>
+            <p class="modal-subtitle" id="results-subtitle">Here's how to invest your deposit</p>
           </div>
+          <button class="modal-close" id="btn-close-results" aria-label="Close results">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
-
-        <!-- Results Table -->
-        <div class="results-table-wrapper">
-          <table class="results-table" id="results-table">
-            <thead>
-              <tr>
-                <th>ETF</th>
-                <th>Buy Units</th>
-                <th>Cost (₪)</th>
-                <th>New Total Units</th>
-                <th>New Value (₪)</th>
-                <th>Target %</th>
-                <th>Actual %</th>
-                <th>Deviation</th>
-              </tr>
-            </thead>
-            <tbody id="results-body">
-              <!-- Rendered by JS -->
-            </tbody>
-            <tfoot id="results-footer">
-              <!-- Rendered by JS -->
-            </tfoot>
-          </table>
+        <div class="modal-body">
+          <!-- Results Table -->
+          <div class="results-table-wrapper">
+            <table class="results-table" id="results-table">
+              <thead>
+                <tr>
+                  <th>ETF</th>
+                  <th>Buy Units</th>
+                  <th>Cost (₪)</th>
+                  <th>New Total Units</th>
+                  <th>New Value (₪)</th>
+                  <th>Target %</th>
+                  <th>Actual %</th>
+                  <th>Deviation</th>
+                </tr>
+              </thead>
+              <tbody id="results-body">
+                <!-- Rendered by JS -->
+              </tbody>
+              <tfoot id="results-footer">
+                <!-- Rendered by JS -->
+              </tfoot>
+            </table>
+          </div>
+          <!-- Allocation bars -->
+          <div class="allocation-visual" id="allocation-visual"></div>
+          <!-- Summary cards -->
+          <div class="summary-cards" id="summary-cards"></div>
         </div>
-
-        <!-- Visual breakdown -->
-        <div class="allocation-visual" id="allocation-visual">
-          <!-- Rendered by JS -->
-        </div>
-
-        <!-- Summary cards -->
-        <div class="summary-cards" id="summary-cards">
-          <!-- Rendered by JS -->
-        </div>
-
-        <div class="results-actions">
+        <div class="modal-footer">
           <button class="btn-save" id="btn-save-history">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M15.833 5.833L7.5 14.167L4.167 10.833" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Save to History & Update Holdings
+            Save to History &amp; Update Holdings
           </button>
         </div>
-      </section>
+      </div>
+    </div>
 
-      <!-- History -->
-      <section class="card card-history hidden" id="section-history">
-        <div class="card-header">
-          <div class="step-badge step-badge-history">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M8 4V8L10.5 10.5M14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">Deposit History</h2>
-            <p class="card-subtitle">Your past investments</p>
-          </div>
-        </div>
-        
-        <div class="history-list" id="history-list">
-          <!-- Rendered by JS -->
-        </div>
-      </section>
-    </main>
+    <!-- History Drawer -->
+    <div class="drawer-backdrop" id="history-backdrop"></div>
+    <div class="drawer" id="history-drawer" role="dialog" aria-modal="true" aria-labelledby="history-drawer-title">
+      <div class="drawer-header">
+        <h2 id="history-drawer-title">Deposit History</h2>
+        <button class="drawer-close" id="btn-close-history" aria-label="Close history">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drawer-body" id="history-list">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
 
     <!-- Footer -->
     <footer class="footer">

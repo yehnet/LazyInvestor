@@ -44,11 +44,13 @@ const state = {
 
 // ===== DOM Setup =====
 async function init() {
-  renderPriceInputs();
-  renderHoldingInputs();
+  renderInputTable();
   setupDepositInput();
   setupCalculateButton();
   setupHistoryActions();
+  setupModalActions();
+  setupDrawerActions();
+  setupKeyboardNav();
   await loadSavedState();
   renderHistory();
   
@@ -57,47 +59,28 @@ async function init() {
   setInterval(updateMarketStatus, 1000);
 }
 
-function setupHistoryActions() {
-  const btn = document.getElementById('btn-save-history');
-  if (btn) btn.addEventListener('click', saveToHistory);
-
-  const historyList = document.getElementById('history-list');
-  if (historyList) {
-    historyList.addEventListener('click', (e) => {
-      const deleteBtn = e.target.closest('.btn-delete');
-      if (deleteBtn) {
-        const id = deleteBtn.dataset.deleteId;
-        deleteHistoryRecord(id);
-      }
-    });
-  }
-}
-
-// ===== Render Price Inputs =====
-function renderPriceInputs() {
-  const container = document.getElementById('etf-prices');
-  container.innerHTML = ETF_CONFIG.map(etf => `
-    <div class="etf-row">
-      <div class="etf-color-dot" style="color: ${etf.color}; background: ${etf.color}"></div>
-      <div class="etf-info">
-        <div class="etf-name">${etf.name}</div>
-        <div class="etf-meta">
-          <a href="${etf.taseUrl}" target="_blank" rel="noopener noreferrer" class="tase-link" title="View on TASE">
-            <svg class="tase-link-icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
+// ===== Render Merged Input Table =====
+function renderInputTable() {
+  const tbody = document.getElementById('input-table-body');
+  tbody.innerHTML = ETF_CONFIG.map(etf => `
+    <tr data-etf-id="${etf.id}">
+      <td>
+        <div class="etf-name-cell">
+          <div class="etf-color-dot" style="color: ${etf.color}; background: ${etf.color}"></div>
+          <a href="${etf.taseUrl}" target="_blank" rel="noopener noreferrer" class="etf-name-link" title="View ${etf.name} on TASE">
+            ${etf.shortName}
+            <svg class="tase-link-icon" width="10" height="10" viewBox="0 0 16 16" fill="none">
               <path d="M6 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3M9 2h5m0 0v5m0-5L7 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            TASE #${etf.id}
           </a>
-          <span>•</span>
-          <span class="etf-target">${(etf.target * 100).toFixed(0)}%</span>
+          <span class="etf-target-badge">${(etf.target * 100).toFixed(0)}%</span>
         </div>
-      </div>
-      <div class="input-group">
-        <span class="input-prefix">₪</span>
+      </td>
+      <td class="td-input">
         <input
           type="number"
           id="price-${etf.id}"
-          class="input-field"
+          class="table-input"
           placeholder="0.00"
           min="0"
           step="0.01"
@@ -105,34 +88,12 @@ function renderPriceInputs() {
           data-input-type="price"
           aria-label="Price per unit for ${etf.name}"
         />
-      </div>
-    </div>
-  `).join('');
-
-  // Add event listeners
-  container.querySelectorAll('input').forEach(input => {
-    input.addEventListener('input', handlePriceInput);
-    input.addEventListener('change', handlePriceInput);
-  });
-}
-
-// ===== Render Holding Inputs =====
-function renderHoldingInputs() {
-  const container = document.getElementById('etf-holdings');
-  container.innerHTML = ETF_CONFIG.map(etf => `
-    <div class="etf-row">
-      <div class="etf-color-dot" style="color: ${etf.color}; background: ${etf.color}"></div>
-      <div class="etf-info">
-        <div class="etf-name">${etf.shortName}</div>
-        <div class="etf-meta">
-          <span id="holding-value-${etf.id}" class="etf-holding-value">₪0</span>
-        </div>
-      </div>
-      <div class="input-group">
+      </td>
+      <td class="td-input">
         <input
           type="number"
           id="holding-${etf.id}"
-          class="input-field input-field-units"
+          class="table-input"
           placeholder="0"
           min="0"
           step="1"
@@ -140,13 +101,19 @@ function renderHoldingInputs() {
           data-input-type="holding"
           aria-label="Number of units for ${etf.name}"
         />
-        <span class="input-suffix">units</span>
-      </div>
-    </div>
+      </td>
+      <td class="td-value" id="holding-value-${etf.id}">₪0</td>
+    </tr>
   `).join('');
 
-  // Add event listeners
-  container.querySelectorAll('input').forEach(input => {
+  // Add event listeners for price inputs
+  tbody.querySelectorAll('input[data-input-type="price"]').forEach(input => {
+    input.addEventListener('input', handlePriceInput);
+    input.addEventListener('change', handlePriceInput);
+  });
+
+  // Add event listeners for holding inputs
+  tbody.querySelectorAll('input[data-input-type="holding"]').forEach(input => {
     input.addEventListener('input', handleHoldingInput);
     input.addEventListener('change', handleHoldingInput);
   });
@@ -165,14 +132,131 @@ function setupCalculateButton() {
   btn.addEventListener('click', calculate);
 }
 
+// ===== Setup History Actions =====
+function setupHistoryActions() {
+  const btn = document.getElementById('btn-save-history');
+  if (btn) btn.addEventListener('click', saveToHistory);
+
+  const historyList = document.getElementById('history-list');
+  if (historyList) {
+    historyList.addEventListener('click', (e) => {
+      const deleteBtn = e.target.closest('.btn-delete');
+      if (deleteBtn) {
+        const id = deleteBtn.dataset.deleteId;
+        deleteHistoryRecord(id);
+      }
+    });
+  }
+}
+
+// ===== Setup Modal (Results) =====
+function setupModalActions() {
+  const closeBtn = document.getElementById('btn-close-results');
+  const backdrop = document.getElementById('results-backdrop');
+
+  if (closeBtn) closeBtn.addEventListener('click', closeResultsModal);
+  if (backdrop) {
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeResultsModal();
+    });
+  }
+}
+
+function openResultsModal() {
+  const backdrop = document.getElementById('results-backdrop');
+  backdrop.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeResultsModal() {
+  const backdrop = document.getElementById('results-backdrop');
+  backdrop.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// ===== Setup Drawer (History) =====
+function setupDrawerActions() {
+  const openBtn = document.getElementById('btn-open-history');
+  const closeBtn = document.getElementById('btn-close-history');
+  const backdrop = document.getElementById('history-backdrop');
+
+  if (openBtn) openBtn.addEventListener('click', openHistoryDrawer);
+  if (closeBtn) closeBtn.addEventListener('click', closeHistoryDrawer);
+  if (backdrop) backdrop.addEventListener('click', closeHistoryDrawer);
+}
+
+function openHistoryDrawer() {
+  const drawer = document.getElementById('history-drawer');
+  const backdrop = document.getElementById('history-backdrop');
+  drawer.classList.add('open');
+  backdrop.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeHistoryDrawer() {
+  const drawer = document.getElementById('history-drawer');
+  const backdrop = document.getElementById('history-backdrop');
+  drawer.classList.remove('open');
+  backdrop.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// ===== Keyboard Navigation =====
+function setupKeyboardNav() {
+  // Define the tab order of all navigable inputs
+  const inputIds = [
+    ...ETF_CONFIG.map(etf => `price-${etf.id}`),
+    ...ETF_CONFIG.map(etf => `holding-${etf.id}`),
+    'deposit-amount'
+  ];
+
+  // Enter key advances to next input or triggers calculate
+  document.addEventListener('keydown', (e) => {
+    // Escape closes modals/drawers
+    if (e.key === 'Escape') {
+      const resultsBackdrop = document.getElementById('results-backdrop');
+      const historyDrawer = document.getElementById('history-drawer');
+      
+      if (resultsBackdrop.classList.contains('active')) {
+        closeResultsModal();
+        return;
+      }
+      if (historyDrawer.classList.contains('open')) {
+        closeHistoryDrawer();
+        return;
+      }
+    }
+
+    // Enter navigates forward through inputs
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+      e.preventDefault();
+      const currentId = e.target.id;
+      const currentIndex = inputIds.indexOf(currentId);
+
+      if (currentIndex >= 0 && currentIndex < inputIds.length - 1) {
+        // Move to next input
+        const nextInput = document.getElementById(inputIds[currentIndex + 1]);
+        if (nextInput) nextInput.focus();
+      } else if (currentIndex === inputIds.length - 1) {
+        // Last input (deposit) — trigger calculate if enabled
+        const btn = document.getElementById('btn-calculate');
+        if (!btn.disabled) {
+          btn.click();
+          e.target.blur();
+        }
+      }
+    }
+  });
+}
+
 // ===== Input Handlers =====
 function handlePriceInput(e) {
   const id = e.target.dataset.etfId;
   const value = parseFloat(e.target.value) || 0;
   state.prices[id] = value;
 
-  // Update holding value display
   updateHoldingValue(id);
+  updateTableTotal();
   updateButtonState();
   updateDashboard();
   saveState();
@@ -183,8 +267,8 @@ function handleHoldingInput(e) {
   const value = parseInt(e.target.value) || 0;
   state.holdings[id] = value;
 
-  // Update holding value display
   updateHoldingValue(id);
+  updateTableTotal();
   updateButtonState();
   updateDashboard();
   saveState();
@@ -209,6 +293,18 @@ function updateHoldingValue(id) {
   const el = document.getElementById(`holding-value-${id}`);
   if (el) {
     el.textContent = value > 0 ? `₪${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₪0';
+  }
+}
+
+function updateTableTotal() {
+  const total = ETF_CONFIG.reduce((sum, etf) => {
+    return sum + (state.prices[etf.id] || 0) * (state.holdings[etf.id] || 0);
+  }, 0);
+  const el = document.getElementById('input-table-total');
+  if (el) {
+    el.textContent = total > 0
+      ? `₪${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : '₪0';
   }
 }
 
@@ -256,7 +352,6 @@ function calculate() {
   while (remainingCash > 0 && madeProgress) {
     madeProgress = false;
 
-    // Find ETF with largest deficit relative to target that we can afford
     let bestIdx = -1;
     let bestDeficit = -Infinity;
 
@@ -318,19 +413,15 @@ function calculate() {
   renderResults(results, totalInvested, leftover, newTotal);
 }
 
-// ===== RENDER RESULTS =====
+// ===== RENDER RESULTS (into modal) =====
 function renderResults(results, totalInvested, leftover, portfolioTotal) {
-  const section = document.getElementById('section-results');
-  section.classList.remove('hidden');
-  section.classList.add('visible');
-
   // Update subtitle
   const subtitle = document.getElementById('results-subtitle');
   subtitle.textContent = leftover > 0
     ? `Invest ₪${totalInvested.toLocaleString(undefined, { maximumFractionDigits: 2 })} • ₪${leftover.toLocaleString(undefined, { maximumFractionDigits: 2 })} remainder (can't buy a full unit)`
     : `Invest ₪${totalInvested.toLocaleString(undefined, { maximumFractionDigits: 2 })} across your 3 ETFs`;
 
-  // Render table
+  // Render table body
   const tbody = document.getElementById('results-body');
   tbody.innerHTML = results.map(r => {
     const deviationClass = Math.abs(r.deviation) < 1 ? 'deviation-good'
@@ -380,10 +471,8 @@ function renderResults(results, totalInvested, leftover, portfolioTotal) {
   // Render summary cards
   renderSummaryCards(results, totalInvested, leftover);
 
-  // Scroll to results
-  setTimeout(() => {
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
+  // Open the results modal
+  openResultsModal();
 }
 
 // ===== Allocation Bars =====
@@ -471,7 +560,7 @@ function updateDashboard() {
 
   // Update Donut Chart Segments
   const segmentsGroup = document.getElementById('donut-segments');
-  let currentOffset = 100; // Start from top (stroke-dashoffset moves backwards)
+  let currentOffset = 100;
   
   if (segmentsGroup) {
     if (totalValue === 0) {
@@ -481,7 +570,6 @@ function updateDashboard() {
         const pct = (etf.value / totalValue) * 100;
         if (pct === 0) return '';
         
-        // Dasharray: [length of dash (pct), length of gap (100 - pct)]
         const dashArray = `${pct} ${100 - pct}`;
         
         const circle = `
@@ -529,7 +617,7 @@ function saveToHistory() {
     id: Date.now().toString(),
     ...state.currentCalculation
   };
-  state.history.unshift(record); // Add to beginning
+  state.history.unshift(record);
   
   // Update holdings
   state.currentCalculation.results.forEach(r => {
@@ -548,45 +636,46 @@ function saveToHistory() {
   
   state.currentCalculation = null;
   updateButtonState();
+  updateTableTotal();
   updateDashboard();
   saveState();
   
-  // Hide results, render history
-  document.getElementById('section-results').classList.remove('visible');
-  document.getElementById('section-results').classList.add('hidden');
+  // Close the results modal
+  closeResultsModal();
   
   renderHistory();
   
-  // Provide visual feedback
-  const btn = document.getElementById('btn-save-history');
-  const originalText = btn.innerHTML;
-  btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M16.667 5L7.5 14.167L3.333 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Saved & Updated!`;
-  btn.disabled = true;
-  btn.classList.add('btn-success');
-  
-  setTimeout(() => {
-    btn.innerHTML = originalText;
-    btn.disabled = false;
-    btn.classList.remove('btn-success');
-  }, 3000);
+  // Provide visual feedback — briefly flash the history button
+  const histBtn = document.getElementById('btn-open-history');
+  if (histBtn) {
+    histBtn.style.background = 'rgba(34, 197, 94, 0.15)';
+    histBtn.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+    histBtn.style.color = 'var(--success)';
+    setTimeout(() => {
+      histBtn.style.background = '';
+      histBtn.style.borderColor = '';
+      histBtn.style.color = '';
+    }, 2000);
+  }
 }
 
 function renderHistory() {
-  const section = document.getElementById('section-history');
   const container = document.getElementById('history-list');
-  
-  if (!section || !container) return;
+  if (!container) return;
   
   if (!state.history || state.history.length === 0) {
-    section.classList.add('hidden');
-    section.classList.remove('visible');
+    container.innerHTML = `
+      <div class="drawer-empty">
+        <svg class="drawer-empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 6v6l4 2M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10z" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p>No deposit history yet.<br>Complete a calculation and save it to see it here.</p>
+      </div>
+    `;
     return;
   }
   
-  section.classList.remove('hidden');
-  section.classList.add('visible');
-  
-  container.innerHTML = state.history.map(record => {
+  container.innerHTML = `<div class="history-list">${state.history.map(record => {
     const d = new Date(record.date);
     const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     
@@ -615,7 +704,7 @@ function renderHistory() {
         </div>
       </div>
     `;
-  }).join('');
+  }).join('')}</div>`;
 }
 
 function deleteHistoryRecord(id) {
@@ -718,6 +807,7 @@ async function loadSavedState() {
 
     // Update all value displays
     ETF_CONFIG.forEach(etf => updateHoldingValue(etf.id));
+    updateTableTotal();
     updateButtonState();
     updateDashboard();
 }
@@ -807,8 +897,6 @@ function updateMarketStatus() {
     }
 
     // Determine if market is currently open
-    // If next transition is 'close', then it is currently open.
-    // If next transition is 'open', then it is currently closed.
     const isOpen = nextEvent.type === 'close';
 
     // Format countdown string
@@ -867,4 +955,3 @@ function updateMarketStatus() {
     console.error('Error updating market status:', e);
   }
 }
-
