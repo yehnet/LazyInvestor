@@ -51,6 +51,10 @@ async function init() {
   setupHistoryActions();
   await loadSavedState();
   renderHistory();
+  
+  // Initialize and schedule market status clock
+  updateMarketStatus();
+  setInterval(updateMarketStatus, 1000);
 }
 
 function setupHistoryActions() {
@@ -720,3 +724,147 @@ async function loadSavedState() {
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', init);
+
+// ===== MARKET STATUS =====
+function updateMarketStatus() {
+  const container = document.getElementById('market-status-container');
+  if (!container) return;
+
+  const now = new Date();
+  
+  try {
+    const timeFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jerusalem',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      weekday: 'long'
+    });
+    
+    const parts = timeFormatter.formatToParts(now);
+    const timeParts = {};
+    parts.forEach(p => {
+      timeParts[p.type] = p.value;
+    });
+
+    const rawHour = parseInt(timeParts.hour, 10) || 0;
+    const hour = rawHour % 24;
+    const minute = parseInt(timeParts.minute, 10) || 0;
+    const second = parseInt(timeParts.second, 10) || 0;
+    const weekday = timeParts.weekday || '';
+    const currentDay = weekday.toLowerCase();
+
+    // Map day name to Sunday-based day index (0-6)
+    const DAYS_MAP = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6
+    };
+    const dayIndex = DAYS_MAP[currentDay] !== undefined ? DAYS_MAP[currentDay] : 0;
+
+    // Define schedule rules
+    const schedule = [
+      { open: { h: 9, m: 59 }, close: { h: 17, m: 25 }, days: [1, 2, 3, 4] }, // Mon - Thu
+      { open: { h: 9, m: 59 }, close: { h: 13, m: 50 }, days: [5] }           // Fri
+    ];
+
+    // Generate weekly events in seconds (relative to Sunday 00:00:00)
+    const events = [];
+    schedule.forEach(sched => {
+      sched.days.forEach(day => {
+        events.push({
+          type: 'open',
+          seconds: day * 86400 + sched.open.h * 3600 + sched.open.m * 60
+        });
+        events.push({
+          type: 'close',
+          seconds: day * 86400 + sched.close.h * 3600 + sched.close.m * 60
+        });
+      });
+    });
+
+    // Sort events chronologically
+    events.sort((a, b) => a.seconds - b.seconds);
+
+    // Calculate current seconds relative to start of the week
+    const currentWeeklySeconds = dayIndex * 86400 + hour * 3600 + minute * 60 + second;
+
+    // Find next event
+    let nextEvent = events.find(e => e.seconds > currentWeeklySeconds);
+    let diffSeconds = 0;
+
+    if (nextEvent) {
+      diffSeconds = nextEvent.seconds - currentWeeklySeconds;
+    } else {
+      // Wrap around to the start of the next week
+      nextEvent = events[0];
+      diffSeconds = (7 * 86400 - currentWeeklySeconds) + nextEvent.seconds;
+    }
+
+    // Determine if market is currently open
+    // If next transition is 'close', then it is currently open.
+    // If next transition is 'open', then it is currently closed.
+    const isOpen = nextEvent.type === 'close';
+
+    // Format countdown string
+    const daysLeft = Math.floor(diffSeconds / 86400);
+    const hoursLeft = Math.floor((diffSeconds % 86400) / 3600);
+    const minutesLeft = Math.floor((diffSeconds % 3600) / 60);
+    const secondsLeft = diffSeconds % 60;
+
+    let countdownStr = '';
+    if (daysLeft > 0) {
+      countdownStr = `${daysLeft}d ${hoursLeft}h`;
+    } else if (hoursLeft > 0) {
+      countdownStr = `${hoursLeft}h ${minutesLeft}m`;
+    } else {
+      countdownStr = `${minutesLeft}m ${secondsLeft}s`;
+    }
+
+    const pad = (num) => String(num).padStart(2, '0');
+    const timeStr = `${pad(hour)}:${pad(minute)}:${pad(second)}`;
+
+    const isMonThu = ['monday', 'tuesday', 'wednesday', 'thursday'].includes(currentDay);
+    const isFri = currentDay === 'friday';
+    const isSatSun = ['saturday', 'sunday'].includes(currentDay);
+
+    container.innerHTML = `
+      <div class="market-status ${isOpen ? 'open' : 'closed'}">
+        <div class="market-time">
+          <span>${timeStr}</span>
+          <span class="timezone-label">Israel Time</span>
+        </div>
+        <div class="market-status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">${isOpen ? 'TASE Open' : 'TASE Closed'}</span>
+        </div>
+        <div class="market-countdown">
+          <span>${isOpen ? 'Closes in' : 'Opens in'} ${countdownStr}</span>
+        </div>
+        <div class="market-tooltip">
+          <div class="tooltip-header">TASE Opening Hours (IST)</div>
+          <div class="tooltip-row ${isMonThu ? 'active-day' : ''}">
+            <span>Mon – Thu</span>
+            <span>09:59 – 17:25</span>
+          </div>
+          <div class="tooltip-row ${isFri ? 'active-day' : ''}">
+            <span>Friday</span>
+            <span>09:59 – 13:50</span>
+          </div>
+          <div class="tooltip-row closed ${isSatSun ? 'active-day' : ''}">
+            <span>Sat – Sun</span>
+            <span>Closed</span>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    console.error('Error updating market status:', e);
+  }
+}
+
